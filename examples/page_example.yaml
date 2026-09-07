@@ -1,0 +1,135 @@
+# =====================================================================
+#  Beispiel: Victron/Venus-OS-Style Power-Flow-Seite mit power_flow_box
+#
+#  Zum Ausprobieren/Kopieren gedacht - keine eigenständig lauffähige
+#  Konfiguration (kein board:, keine wifi:/api:, kein reales display:),
+#  gleiche Konvention wie m5dial_clock_sbb/examples/m5dial_page.yaml.
+#  Setzt einen bestehenden LVGL-Basisbau voraus, der schon `lvgl:` mit
+#  einem Display bereitstellt.
+#
+#  Zwei Boxen (Shore, Battery-mit-Bar) + eine Flow-Zeile zwischen ihnen -
+#  genug, um das Muster zu zeigen, ohne das komplette 3x2-Grid aus
+#  smartebl_display_esphome/smart_ebl_pages/page_electric.yaml zu
+#  duplizieren. Siehe README.md "Migration" für den vollen Kontext.
+# =====================================================================
+
+external_components:
+  - source:
+      type: git
+      url: https://github.com/CzarofAK/power_flow_widget
+      ref: main
+    refresh: 1d
+    components: [power_flow_box]
+
+# Marker-Key - ohne ihn lädt ESPHome die Python-Seite der Komponente
+# nicht, siehe __init__.py's eigener Kommentar dazu.
+power_flow_box:
+
+# Victron/Venus-OS-getönte Panel-Farben, identisch zu den Werten aus
+# smartebl_display_esphome's page_electric.yaml (Phase 1, 2026-09-07) -
+# nicht neu erfunden, nur als benannte color:-IDs statt Literalen, damit
+# power_flow_box sie per `bg_color:`/`border_color:` referenzieren kann.
+color:
+  - id: col_panel_bg
+    hex: "142230"
+  - id: col_panel_border
+    hex: "27588A"
+  - id: col_title
+    hex: "707070"
+  - id: col_good
+    hex: "2ECC71"
+  - id: col_warning
+    hex: "F39C12"
+  - id: col_alarm
+    hex: "E74C3C"
+  - id: col_active
+    hex: "4A9EFF"
+  - id: col_idle
+    hex: "707070"
+
+lvgl:
+  pages:
+    - id: page_electric_demo
+      bg_color: 0x000000
+      bg_opa: COVER
+      widgets:
+        - power_flow_box:
+            id: box_shore
+            x: 20
+            y: 20
+            width: 300
+            height: 290
+            title: "SHORE"
+            bg_color: col_panel_bg
+            border_color: col_panel_border
+            title_color: col_title
+            show_state: true
+            show_sub_row: true
+
+        # Flow-Zeile zwischen den Boxen - bewusst KEIN eigener Widget-Typ
+        # (siehe README "Links brauchen keine eigene Komponente"): ein
+        # simples label: in einem schmalen obj:-Wrapper, exakt das
+        # Muster aus page_electric.yaml's &arrow_wrap. draw_electric-
+        # artige Skripte setzen Text/Farbe direkt per
+        # lv_label_set_text()/lv_obj_set_style_text_color() auf die
+        # `arrow_shore_battery`-ID - kein Setter dieser Komponente nötig.
+        - obj:
+            x: 320
+            y: 20
+            width: 40
+            height: 290
+            bg_opa: TRANSPARENT
+            border_width: 0
+            widgets:
+              - label:
+                  id: arrow_shore_battery
+                  align: CENTER
+                  text: "-"
+                  text_color: col_idle
+
+        - power_flow_box:
+            id: box_battery
+            x: 360
+            y: 20
+            width: 300
+            height: 290
+            title: "BATTERY"
+            bg_color: col_panel_bg
+            border_color: col_panel_border
+            title_color: col_title
+            show_state: true
+            show_sub_row: true
+            show_bar: true
+            bar_min: 0
+            bar_max: 100
+            bar_track_color: col_panel_border
+
+# Beispielhafte Verdrahtung - reale Entities durch eigene ersetzen.
+# Zeigt das ICD in Aktion: die Komponente kennt nur set_main()/
+# set_state()/set_sub()/set_bar(), NICHT sensor.smartshunt_ladestand -
+# das bleibt Sache dieser page-eigenen Sensor-Definitionen, exakt das
+# gleiche "Widget kennt State, nicht die Regel dahinter"-Prinzip wie
+# sbb_clock's set_night_mode().
+sensor:
+  - platform: homeassistant
+    id: s_battery_soc
+    entity_id: sensor.smartshunt_ladestand
+    on_value:
+      - lambda: |-
+          char buf[16];
+          snprintf(buf, sizeof(buf), "%.0f%%", x);
+          // Same 20%/40%-SOC thresholds as
+          // smartebl_display_esphome/smart_ebl_pages/page_electric.yaml -
+          // one color decision, reused for both the number and the bar
+          // so they can never disagree (see that file's own comment on
+          // why the bar gets an explicit "good" green while the number
+          // keeps its plain-white default).
+          uint32_t num_hex = 0xFFFFFF;
+          uint32_t bar_hex = 0x2ECC71;
+          if (x < 20.0f) { num_hex = 0xE74C3C; bar_hex = 0xE74C3C; }
+          else if (x < 40.0f) { num_hex = 0xF39C12; bar_hex = 0xF39C12; }
+          // uint8_t constructor args truncate a uint32_t to its low byte,
+          // so shifting by 16/8/0 without an explicit mask still lands
+          // the right R/G/B byte in each argument.
+          id(box_battery).set_main(buf, Color(num_hex >> 16, num_hex >> 8, num_hex));
+          id(box_battery).set_bar((int) x, Color(bar_hex >> 16, bar_hex >> 8, bar_hex));
