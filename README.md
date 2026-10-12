@@ -7,6 +7,11 @@ optional left/right sub-value row, and an optional horizontal fill bar
 power-flow overview page (Shore → Inverter/Charger → AC Loads / Solar →
 Battery → DC Loads) is built out of.
 
+> [!WARNING]
+> **Safety & liability / Sicherheit & Haftung** – Private hobby project, provided "as is" and used **at your own risk**.
+> Display widget, **v0.1, not yet tested on hardware**. Displayed power, battery and charge values can be wrong. Do not make decisions about batteries, chargers or electrical loads based on this display alone.
+> See [DISCLAIMER.md](DISCLAIMER.md) (EN/DE).
+
 ## Where this came from
 
 [`smartebl_display_esphome`](https://github.com/CzarofAK/smartebl_display_esphome)'s
@@ -190,4 +195,4 @@ this repo.
 
 ## License
 
-MIT, see `LICENSE`.
+MIT, see [LICENSE](LICENSE). Use at your own risk – see [DISCLAIMER.md](DISCLAIMER.md).
